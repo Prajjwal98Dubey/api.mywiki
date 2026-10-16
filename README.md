@@ -82,6 +82,24 @@ npm run dev                     # GET /api/health → { ok: true, storage: "mong
 On startup the server creates its indexes (unique: users `emailLower`, `usernameLower`; pages `slugKey`; revisions
 `pageId + revNumber`). Edit-conflict checks use an in-process lock, so run **one server process** per database for now.
 
+## Images (local disk or Amazon S3)
+
+`IMAGE_STORAGE=local` (default) keeps uploads in `UPLOAD_DIR`. `IMAGE_STORAGE=s3` stores them in a **private** S3 bucket.
+Either way, image URLs are `/uploads/<uuid>.<ext>` and the server streams them (`src/images/imageStore.js`), so pages and
+the client don't change when you switch.
+
+**Only images, strictly** (`src/images/detectImage.js`): each upload is held in memory (≤ 5 MB) and inspected byte by
+byte before anything is written. It must be exactly one complete JPEG, PNG, GIF or WebP, ≤ 10,000 px per side and ≤ 40 MP.
+Videos, documents, SVG/HTML, archives, truncated files, and images with extra data appended (e.g. "motion photo" MP4s,
+polyglots) get `415`. The stored type and extension come from the bytes, never from the client.
+
+Switching to S3:
+1. Create a bucket (keep **Block Public Access** on) and an IAM user whose policy allows `s3:PutObject` and
+   `s3:GetObject` on `arn:aws:s3:::<bucket>/mywiki-profile-img/*` and `s3:ListBucket` on `arn:aws:s3:::<bucket>`.
+2. In `.env`: `IMAGE_STORAGE=s3`, `S3_BUCKET`, `S3_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`.
+3. `npm run migrate:uploads-to-s3` copies existing local images (same names, so old URLs keep working; safe to re-run).
+4. `npm run dev`: startup checks the bucket and logs `images: s3`.
+
 ## Sign in with Google
 
 One OAuth flow handles both sign-up and log-in (spec §7.2.1). The browser goes to

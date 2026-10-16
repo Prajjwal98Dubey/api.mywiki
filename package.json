@@ -14,9 +14,11 @@
     "seed": "node --env-file-if-exists=.env scripts/seed.js",
     "test": "node --test --test-concurrency=1",
     "test:mongo": "node --env-file-if-exists=.env scripts/testMongo.js",
-    "migrate:json-to-mongo": "node --env-file-if-exists=.env scripts/migrateJsonToMongo.js"
+    "migrate:json-to-mongo": "node --env-file-if-exists=.env scripts/migrateJsonToMongo.js",
+    "migrate:uploads-to-s3": "node --env-file-if-exists=.env scripts/migrateUploadsToS3.js"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1152.0",
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",

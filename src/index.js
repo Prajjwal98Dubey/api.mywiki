@@ -5,9 +5,13 @@ import { createApp } from './app.js';
 const config = loadConfig();
 const repos = await createRepositories(config);
 const app = createApp({ repos, config });
+await app.locals.imageStore.verify(); // S3: fail fast on a wrong bucket/region/credentials
 
 const server = app.listen(config.port, () => {
-  console.log(`MyWiki API listening on http://localhost:${config.port} (storage: ${repos.driver}, env: ${config.env})`);
+  console.log(
+    `MyWiki API listening on http://localhost:${config.port} ` +
+      `(storage: ${repos.driver}, images: ${app.locals.imageStore.driver}, env: ${config.env})`,
+  );
   if (!process.env.JWT_SECRET) console.warn('Warning: JWT_SECRET is not set — using an insecure development secret.');
 });
 
