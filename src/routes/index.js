@@ -30,7 +30,7 @@ export function createServices({ repos, config }) {
 }
 
 /** Builds the /api router. */
-export function buildRoutes({ repos, config }) {
+export function buildRoutes({ repos, config, imageStore }) {
   const services = createServices({ repos, config });
 
   const authController = createAuthController({ authService: services.authService, config });
@@ -42,7 +42,7 @@ export function buildRoutes({ repos, config }) {
   const pagesController = createPagesController(services);
   const revisionsController = createRevisionsController(services);
   const searchController = createSearchController(services);
-  const uploadsController = createUploadsController();
+  const uploadsController = createUploadsController({ imageStore });
 
   const router = Router();
   router.use('/health', healthRoutes({ repos }));

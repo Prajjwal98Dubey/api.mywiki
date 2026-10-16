@@ -25,6 +25,16 @@ const envSchema = z.object({
   // Public origin the browser uses (the provider redirects to <PUBLIC_ORIGIN>/api/auth/oauth/<id>/callback).
   // Defaults to CLIENT_ORIGIN, i.e. through the Vite proxy in development.
   PUBLIC_ORIGIN: z.string().trim().optional(),
+  // Uploaded images: local disk (UPLOAD_DIR) or Amazon S3.
+  IMAGE_STORAGE: z.enum(['local', 's3']).default('local'),
+  S3_BUCKET: z.string().trim().optional(),
+  S3_REGION: z.string().trim().optional(),
+  AWS_REGION: z.string().trim().optional(),
+  // Folder inside the bucket that holds the images (profile pictures).
+  S3_PREFIX: z.string().trim().default('mywiki-profile-img/'),
+  // Only for S3-compatible services (MinIO, LocalStack…); leave unset for AWS.
+  S3_ENDPOINT: z.string().trim().optional(),
+  S3_FORCE_PATH_STYLE: z.enum(['true', 'false']).default('false'),
 });
 
 const stripTrailingSlash = (url) => url.replace(/\/+$/, '');
@@ -72,6 +82,12 @@ export function loadConfig(env = process.env, overrides = {}) {
     throw new Error('Set both GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to enable Google sign-in (or neither).');
   }
 
+  const s3Region = e.S3_REGION || e.AWS_REGION;
+  if (e.IMAGE_STORAGE === 's3') {
+    if (!e.S3_BUCKET) throw new Error('S3_BUCKET must be set when IMAGE_STORAGE=s3');
+    if (!s3Region) throw new Error('S3_REGION (or AWS_REGION) must be set when IMAGE_STORAGE=s3');
+  }
+
   const clientOrigin = stripTrailingSlash(e.CLIENT_ORIGIN);
   const config = {
     port: e.PORT,
@@ -87,6 +103,15 @@ export function loadConfig(env = process.env, overrides = {}) {
     storageDriver: e.STORAGE_DRIVER,
     dataDir: path.resolve(SERVER_ROOT, e.DATA_DIR),
     uploadDir: path.resolve(SERVER_ROOT, e.UPLOAD_DIR),
+    imageStorage: e.IMAGE_STORAGE,
+    s3: {
+      bucket: e.S3_BUCKET,
+      region: s3Region,
+      // "uploads" → "uploads/"; "" → bucket root
+      prefix: e.S3_PREFIX ? e.S3_PREFIX.replace(/^\/+|\/+$/g, '') + '/' : '',
+      endpoint: e.S3_ENDPOINT || undefined,
+      forcePathStyle: e.S3_FORCE_PATH_STYLE === 'true',
+    },
     maxUploadBytes: Math.round(e.MAX_UPLOAD_MB * 1024 * 1024),
     mongodbUri,
     mongodbDbName: e.MONGODB_DB_NAME,

@@ -1,9 +1,9 @@
-import fs from 'node:fs/promises';
 import { HttpError, badRequest } from '../lib/errors.js';
-import { hasValidMagicBytes } from '../middleware/upload.js';
+import { detectImage, InvalidImageError } from '../images/detectImage.js';
 
-export function createUploadsController() {
+export function createUploadsController({ imageStore }) {
   return {
+    /** POST /api/uploads/image → 201 { url, filename, size, mimeType, width, height } */
     async image(req, res) {
       const file = req.file;
       if (!file) {
@@ -11,20 +11,31 @@ export function createUploadsController() {
           { path: 'image', message: 'Required' },
         ]);
       }
-      let valid = false;
+
+      // The strict gate: only exactly-one JPEG/PNG/WebP/GIF image gets past this line.
+      let image;
       try {
-        valid = await hasValidMagicBytes(file.path, file.mimetype);
-      } finally {
-        if (!valid) await fs.rm(file.path, { force: true });
+        image = { buffer: file.buffer, ...detectImage(file.buffer) };
+      } catch (err) {
+        if (err instanceof InvalidImageError) throw new HttpError(415, 'UNSUPPORTED_MEDIA_TYPE', err.message);
+        throw err;
       }
-      if (!valid) {
-        throw new HttpError(415, 'UNSUPPORTED_MEDIA_TYPE', 'The file content is not a valid JPEG, PNG, WebP or GIF image');
+
+      let filename;
+      try {
+        ({ filename } = await imageStore.save(image));
+      } catch (err) {
+        console.error(`[images] storing upload failed (${imageStore.driver}):`, err?.name, err?.message);
+        throw new HttpError(500, 'INTERNAL', 'Could not store the image. Please try again.');
       }
+
       res.status(201).json({
-        url: `/uploads/${file.filename}`,
-        filename: file.filename,
-        size: file.size,
-        mimeType: file.mimetype,
+        url: `/uploads/${filename}`,
+        filename,
+        size: image.buffer.length,
+        mimeType: image.mimeType, // the verified type, not what the client claimed
+        width: image.width,
+        height: image.height,
       });
     },
   };
