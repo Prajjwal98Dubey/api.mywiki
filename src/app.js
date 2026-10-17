@@ -15,12 +15,14 @@ export function createApp({ repos, config }) {
   const app = express();
   app.locals.imageStore = imageStore;
   app.disable('x-powered-by');
-  app.set('trust proxy', 1);
+  // Number of proxies in front of Node (Nginx = 1, CloudFront + Nginx = 2), so req.ip is the
+  // real client — rate limits depend on it.
+  app.set('trust proxy', config.trustProxy ?? 1);
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'same-site' } }));
   app.use(cors({ origin: config.clientOrigin, credentials: true })); // only matters when not proxied
   app.use(express.json({ limit: '1mb' }));
   app.use(cookieParser());
-  if (config.env !== 'test') app.use(morgan('dev'));
+  if (config.env !== 'test') app.use(morgan(config.isProduction ? 'combined' : 'dev'));
 
   app.use('/uploads', imageStore.serve); // local disk or S3, same URLs
   app.use('/api', optionalAuth(config, repos), buildRoutes({ repos, config, imageStore }));

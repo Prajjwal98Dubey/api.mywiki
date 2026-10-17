@@ -109,4 +109,18 @@ describe('rate limiting', () => {
       await limited.cleanup();
     }
   });
+
+  test('behind CloudFront + Nginx (TRUST_PROXY=2) limits are per real client, not per edge', async () => {
+    const limited = await createTestApp({ trustProxy: 2, rateLimit: { enabled: true, loginMax: 1, registerMax: 1 } });
+    try {
+      const body = { email: 'x@example.com', password: 'whatever1' };
+      // CloudFront appends the viewer IP to X-Forwarded-For; Nginx then adds the edge IP.
+      const via = (client) => limited.agent().post('/api/auth/login').set('X-Forwarded-For', `${client}, 130.176.0.10`).send(body);
+      assert.equal((await via('203.0.113.1')).status, 401);
+      assert.equal((await via('203.0.113.1')).status, 429);
+      assert.equal((await via('203.0.113.2')).status, 401, 'another user through the same edge is not blocked');
+    } finally {
+      await limited.cleanup();
+    }
+  });
 });

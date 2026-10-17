@@ -12,6 +12,13 @@ import { createPageSchema, updatePageSchema } from '../src/validation/page.schem
 const config = loadConfig();
 const force = process.argv.includes('--force');
 
+// The demo account has a published password; never create it in production by accident.
+if (config.isProduction && !process.argv.includes('--allow-production')) {
+  console.error('Refusing to seed demo data with NODE_ENV=production (the demo password is public).');
+  console.error('If you really mean it: npm run seed -- --allow-production');
+  process.exit(1);
+}
+
 // Works with both drivers (STORAGE_DRIVER=json | mongo). A corrupt JSON data file
 // makes createRepositories throw, so it is never clobbered.
 const repos = await createRepositories(config);
