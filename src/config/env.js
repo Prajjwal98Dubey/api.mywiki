@@ -8,6 +8,8 @@ const DEV_JWT_SECRET = 'dev-only-insecure-jwt-secret-change-me';
 
 const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(5000),
+  // Proxies in front of Node: 1 = Nginx only, 2 = CloudFront → Nginx.
+  TRUST_PROXY: z.coerce.number().int().min(0).max(5).default(1),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   CLIENT_ORIGIN: z.string().default('http://localhost:5173'),
   JWT_SECRET: z.string().min(16).optional(),
@@ -91,6 +93,7 @@ export function loadConfig(env = process.env, overrides = {}) {
   const clientOrigin = stripTrailingSlash(e.CLIENT_ORIGIN);
   const config = {
     port: e.PORT,
+    trustProxy: e.TRUST_PROXY,
     env: e.NODE_ENV,
     isProduction: e.NODE_ENV === 'production',
     clientOrigin,

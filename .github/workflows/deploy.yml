@@ -1,0 +1,81 @@
+name: Deploy to EC2
+
+# Runs when a PR is merged into main (a merge is a push to main), or by hand from the
+# Actions tab. Tests first; only a green build is deployed.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# One deploy at a time; a newer merge waits instead of interrupting a deploy mid-way.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci --no-audit --no-fund
+
+      # JSON storage + temp dirs: needs no secrets or network services.
+      - run: npm test
+
+  deploy:
+    name: Deploy (pm2)
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_HOST_KEY: ${{ secrets.EC2_HOST_KEY }}
+        run: |
+          for v in EC2_HOST EC2_USER EC2_SSH_KEY EC2_HOST_KEY; do
+            [ -n "${!v}" ] || { echo "::error::Missing repository secret $v (see deploy/README.md)"; exit 1; }
+          done
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$EC2_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # Pinned host key: refuse to deploy if the server's identity changes.
+          printf '%s\n' "$EC2_HOST_KEY" > ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<EOF
+          Host ec2
+            HostName $EC2_HOST
+            User $EC2_USER
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+            ServerAliveInterval 30
+          EOF
+
+      # The script comes from this commit and runs on the server: git checkout of this
+      # exact commit → npm ci → pm2 restart → health check → automatic rollback on failure.
+      - name: Update the server
+        run: ssh ec2 "bash -s -- '${GITHUB_SHA}'" < deploy/deploy-pm2.sh
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Deploy ${{ job.status }}"
+            echo "- Commit: \`${GITHUB_SHA::7}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
