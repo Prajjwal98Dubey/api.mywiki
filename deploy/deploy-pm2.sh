@@ -1,19 +1,8 @@
 #!/usr/bin/env bash
-# Runs ON the EC2 instance. GitHub Actions pipes this file over SSH:
-#
-#   ssh ec2 "bash -s -- <commit-sha>" < deploy/deploy-pm2.sh
-#
-# Server layout (see deploy/README.md):
-#   /opt/mywiki/api           git clone of this repo, run by pm2 as "mywiki-api"
-#   /opt/mywiki/shared/.env   production settings (never in git)
-#
-# Steps: fetch → check out the exact commit → npm ci → pm2 restart → wait for /api/health.
-# If the new version isn't healthy, it goes back to the previous commit, restarts that,
-# and exits non-zero so the GitHub run is marked failed.
 set -euo pipefail
 
 SHA="${1:?usage: deploy-pm2.sh <commit-sha>}"
-APP_DIR="${APP_DIR:-/opt/mywiki/api}"
+APP_DIR="${APP_DIR:-/opt/mywiki/api.mywiki}"
 ENV_FILE="${ENV_FILE:-/opt/mywiki/shared/.env}"
 PM2_NAME="${PM2_NAME:-mywiki-api}"
 HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:5000/api/health}"
